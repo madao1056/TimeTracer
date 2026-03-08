@@ -1,0 +1,14 @@
+{
+  "pollIntervalMs": 5000,
+  "idleThresholdMs": 300000,
+  "sleepGapThresholdMs": 30000,
+  "reportTime": "23:55",
+  "categories": {
+    "browser": ["Google Chrome", "Safari", "Firefox", "Arc", "Brave Browser", "Microsoft Edge"],
+    "editor": ["Code", "Visual Studio Code", "Cursor", "Xcode", "IntelliJ IDEA", "WebStorm"],
+    "terminal": ["Terminal", "iTerm2", "Warp", "Alacritty", "kitty"],
+    "communication": ["Slack", "Discord", "Microsoft Teams", "Zoom", "LINE", "Messages"],
+    "productivity": ["Notion", "Obsidian", "Notes", "Reminders", "Calendar", "Finder"],
+    "media": ["Spotify", "Music", "YouTube", "VLC", "QuickTime Player"]
+  }
+}

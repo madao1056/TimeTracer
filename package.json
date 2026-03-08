@@ -1,0 +1,21 @@
+{
+  "name": "time-tracer",
+  "version": "1.0.0",
+  "description": "PC usage tracking tool with daily HTML reports",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "report": "tsx src/report/reportGenerator.ts",
+    "install-daemon": "bash scripts/install.sh",
+    "uninstall-daemon": "bash scripts/uninstall.sh"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.7.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}
