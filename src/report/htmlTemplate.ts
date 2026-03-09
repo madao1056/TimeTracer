@@ -1,20 +1,4 @@
-import type { AppSummary, CategorySummary, HourlyAppEntry, HourlySummary, TimelineEntry } from "../types.ts";
 import { config } from "../config.ts";
-
-function formatDuration(sec: number): string {
-  const h = Math.floor(sec / 3600);
-  const m = Math.floor((sec % 3600) / 60);
-  if (h > 0) return `${h}h ${m}m`;
-  return `${m}m`;
-}
-
-function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
 
 const CATEGORY_COLORS: Record<string, string> = {
   browser: "#4285F4",
@@ -26,120 +10,21 @@ const CATEGORY_COLORS: Record<string, string> = {
   other: "#9E9E9E",
 };
 
-function categorize(appName: string): string {
-  for (const [category, apps] of Object.entries(config.categories)) {
-    if (apps.some((a) => appName.toLowerCase().includes(a.toLowerCase()))) {
-      return category;
-    }
-  }
-  return "other";
-}
+const APP_PALETTE = ["#4285F4", "#34A853", "#FBBC04", "#EA4335", "#9C27B0", "#00BCD4", "#FF9800", "#795548"];
 
-interface ReportInput {
-  date: string;
-  totalActiveSec: number;
-  totalIdleSec: number;
-  appSummary: AppSummary[];
-  categorySummary: CategorySummary[];
-  hourlySummary: HourlySummary[];
-  hourlyAppBreakdown: HourlyAppEntry[];
-  timeline: TimelineEntry[];
-}
-
-export function generateHtml(input: ReportInput): string {
-  const {
-    date,
-    totalActiveSec,
-    totalIdleSec,
-    appSummary,
-    categorySummary,
-    hourlySummary,
-    hourlyAppBreakdown,
-    timeline,
-  } = input;
-
-  const top10 = appSummary.slice(0, 10);
-  const top10Labels = JSON.stringify(top10.map((a) => a.appName));
-  const top10Data = JSON.stringify(top10.map((a) => Math.round(a.totalSec / 60)));
-  const top10Colors = JSON.stringify(
-    top10.map((a) => CATEGORY_COLORS[a.category] ?? CATEGORY_COLORS.other)
-  );
-
-  const catLabels = JSON.stringify(categorySummary.map((c) => c.category));
-  const catData = JSON.stringify(categorySummary.map((c) => Math.round(c.totalSec / 60)));
-  const catColors = JSON.stringify(
-    categorySummary.map((c) => CATEGORY_COLORS[c.category] ?? CATEGORY_COLORS.other)
-  );
-
-  const activeHourly = hourlySummary.filter((h) => h.totalSec > 0);
-  const hourLabels = JSON.stringify(activeHourly.map((h) => `${h.hour}:00`));
-  const hourData = JSON.stringify(activeHourly.map((h) => Math.round(h.totalSec / 60)));
-
-  // タイムライン帯グラフ用データ: 1時間ごとのアプリ別分数
-  const activeHours = hourlySummary.filter((h) => h.totalSec > 0).map((h) => h.hour);
-  const tlHourLabels = JSON.stringify(activeHours.map((h) => `${h}:00`));
-
-  // 各時間帯で使われたアプリを集計
-  const hourAppMap = new Map<number, Map<string, number>>();
-  for (const entry of hourlyAppBreakdown) {
-    if (!hourAppMap.has(entry.hour)) hourAppMap.set(entry.hour, new Map());
-    hourAppMap.get(entry.hour)!.set(entry.appName, Math.round(entry.totalSec / 60));
-  }
-
-  // 全時間帯で使われたアプリのユニークリスト（使用時間降順）
-  const appTotalMap = new Map<string, number>();
-  for (const entry of hourlyAppBreakdown) {
-    appTotalMap.set(entry.appName, (appTotalMap.get(entry.appName) ?? 0) + entry.totalSec);
-  }
-  const tlApps = Array.from(appTotalMap.entries())
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 8)
-    .map(([name]) => name);
-
-  // アプリごとの色を割り当て
-  const APP_PALETTE = ["#4285F4", "#34A853", "#FBBC04", "#EA4335", "#9C27B0", "#00BCD4", "#FF9800", "#795548"];
-  const tlDatasets = JSON.stringify(
-    tlApps.map((appName, i) => ({
-      label: appName,
-      data: activeHours.map((h) => hourAppMap.get(h)?.get(appName) ?? 0),
-      backgroundColor: CATEGORY_COLORS[categorize(appName)] ?? APP_PALETTE[i % APP_PALETTE.length],
-      borderRadius: 2,
-    }))
-  );
-
-  const timelineRows = timeline
-    .filter((t) => t.durationSec >= 10)
-    .slice(0, 100)
-    .map(
-      (t) =>
-        `<tr>
-          <td>${escapeHtml(t.appName)}</td>
-          <td>${new Date(t.startTime).toLocaleTimeString("ja-JP")}</td>
-          <td>${new Date(t.endTime).toLocaleTimeString("ja-JP")}</td>
-          <td>${formatDuration(t.durationSec)}</td>
-        </tr>`
-    )
-    .join("\n");
-
-  const appTableRows = appSummary
-    .slice(0, 20)
-    .map(
-      (a, i) =>
-        `<tr>
-          <td>${i + 1}</td>
-          <td>${escapeHtml(a.appName)}</td>
-          <td>${a.category}</td>
-          <td>${formatDuration(a.totalSec)}</td>
-        </tr>`
-    )
-    .join("\n");
+export function generateViewerHtml(embeddedData?: Record<string, unknown>): string {
+  const categoriesJson = JSON.stringify(config.categories);
+  const categoryColorsJson = JSON.stringify(CATEGORY_COLORS);
+  const appPaletteJson = JSON.stringify(APP_PALETTE);
+  const targetActiveHours = config.targetActiveHours;
+  const dataStoreJson = JSON.stringify(embeddedData ?? {});
 
   return `<!DOCTYPE html>
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>TimeTracer Report - ${escapeHtml(date)}</title>
+  <title>TimeTracer レポート</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -147,10 +32,16 @@ export function generateHtml(input: ReportInput): string {
     .container { max-width: 1200px; margin: 0 auto; }
     h1 { font-size: 1.8rem; margin-bottom: 8px; }
     h2 { font-size: 1.3rem; margin: 24px 0 12px; border-bottom: 2px solid #ddd; padding-bottom: 4px; }
+    .nav { display: flex; align-items: center; gap: 10px; margin-top: 8px; flex-wrap: wrap; }
+    .nav select, .nav input { padding: 4px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.95rem; color: #333; font-family: inherit; }
+    .nav select { font-weight: 600; background: white; cursor: pointer; }
     .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin: 16px 0; }
     .card { background: white; border-radius: 8px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
     .card .label { font-size: 0.85rem; color: #666; }
     .card .value { font-size: 1.6rem; font-weight: bold; margin-top: 4px; }
+    .progress-bar { background: #e0e0e0; border-radius: 4px; height: 8px; margin-top: 8px; overflow: hidden; }
+    .progress-fill { height: 100%; border-radius: 4px; transition: width 0.3s; }
+    .card .sub { font-size: 0.8rem; color: #999; margin-top: 4px; }
     .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 16px 0; }
     .chart-box { background: white; border-radius: 8px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
     .full-width { grid-column: 1 / -1; }
@@ -160,154 +51,462 @@ export function generateHtml(input: ReportInput): string {
     th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid #eee; }
     th { background: #fafafa; font-weight: 600; font-size: 0.85rem; color: #666; }
     td { font-size: 0.9rem; }
+    .loading { text-align: center; padding: 40px; color: #999; }
+    .no-data { text-align: center; padding: 40px; color: #999; font-size: 1.1rem; }
     @media (max-width: 768px) { .charts { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>TimeTracer 日次レポート</h1>
-    <p style="color: #666;">${escapeHtml(date)}</p>
-
-    <div class="summary">
-      <div class="card">
-        <div class="label">稼働時間</div>
-        <div class="value">${formatDuration(totalActiveSec)}</div>
-      </div>
-      <div class="card">
-        <div class="label">離席時間</div>
-        <div class="value">${formatDuration(totalIdleSec)}</div>
-      </div>
-      <div class="card">
-        <div class="label">使用アプリ数</div>
-        <div class="value">${appSummary.length}</div>
-      </div>
+    <h1>TimeTracer レポート</h1>
+    <div class="nav">
+      <select id="periodSelect">
+        <option value="daily" selected>日次</option>
+        <option value="weekly">週次</option>
+        <option value="monthly">月次</option>
+      </select>
+      <input type="date" id="dateDaily">
+      <input type="date" id="dateWeekly" style="display:none;">
+      <span id="weeklyRange" style="color:#666;font-size:0.9rem;display:none;"></span>
+      <input type="month" id="dateMonthly" style="display:none;">
     </div>
 
-    <div class="charts">
-      <div class="chart-box">
-        <h2 style="border:none;margin:0 0 12px;">TOP 10 アプリ（分）</h2>
-        <canvas id="appChart"></canvas>
-      </div>
-      <div class="chart-box">
-        <h2 style="border:none;margin:0 0 12px;">カテゴリ別</h2>
-        <canvas id="catChart"></canvas>
-      </div>
-      <div class="chart-box full-width">
-        <h2 style="border:none;margin:0 0 12px;">時間帯別アクティビティ（分）</h2>
-        <canvas id="hourChart"></canvas>
-      </div>
+    <div id="content">
+      <div class="loading">データを読み込み中...</div>
     </div>
-
-    <div class="charts">
-      <div class="chart-box full-width">
-        <h2 style="border:none;margin:0 0 12px;">タイムライン</h2>
-        <canvas id="timelineChart"></canvas>
-      </div>
-    </div>
-
-    <h2>アプリランキング</h2>
-    <table>
-      <thead><tr><th>#</th><th>アプリ</th><th>カテゴリ</th><th>時間</th></tr></thead>
-      <tbody>${appTableRows}</tbody>
-    </table>
-
-    <h2>詳細ログ</h2>
-    <details>
-      <summary style="cursor:pointer;padding:8px 0;font-size:0.9rem;color:#666;">全セッション一覧を表示</summary>
-      <table>
-        <thead><tr><th>アプリ</th><th>開始</th><th>終了</th><th>時間</th></tr></thead>
-        <tbody>${timelineRows}</tbody>
-      </table>
-    </details>
 
     <p style="text-align:center;color:#999;margin-top:24px;font-size:0.8rem;">
-      Generated by TimeTracer at ${new Date().toLocaleString("ja-JP")}
+      Generated by TimeTracer
     </p>
   </div>
 
-  <script>
-    new Chart(document.getElementById('appChart'), {
+<script>
+(function() {
+  const CATEGORIES = ${categoriesJson};
+  const CATEGORY_COLORS = ${categoryColorsJson};
+  const APP_PALETTE = ${appPaletteJson};
+  const TARGET_ACTIVE_HOURS = ${targetActiveHours};
+  const DATA_STORE = ${dataStoreJson};
+
+  const periodSelect = document.getElementById('periodSelect');
+  const dateDaily = document.getElementById('dateDaily');
+  const dateWeekly = document.getElementById('dateWeekly');
+  const weeklyRange = document.getElementById('weeklyRange');
+  const dateMonthly = document.getElementById('dateMonthly');
+  const content = document.getElementById('content');
+
+  let charts = [];
+
+  function todayStr() {
+    const d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  }
+
+  function thisMonthStr() {
+    const d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+  }
+
+  function formatDate(d) {
+    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  }
+
+  function fmtDur(sec) {
+    const h = Math.floor(sec / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    return h > 0 ? h + 'h ' + m + 'm' : m + 'm';
+  }
+
+  function shortDate(dateStr) {
+    const parts = dateStr.split('-');
+    return parseInt(parts[1]) + '/' + parseInt(parts[2]);
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  function categorize(appName) {
+    for (const [cat, apps] of Object.entries(CATEGORIES)) {
+      if (apps.some(a => appName.toLowerCase().includes(a.toLowerCase()))) return cat;
+    }
+    return 'other';
+  }
+
+  function destroyCharts() {
+    charts.forEach(c => c.destroy());
+    charts = [];
+  }
+
+  // --- データ取得 ---
+
+  function fetchJson(date) {
+    return DATA_STORE[date] || null;
+  }
+
+  function emptyData(date) {
+    return {
+      date: date,
+      totalActiveSec: 0,
+      totalIdleSec: 0,
+      appSummary: [],
+      categorySummary: [],
+      hourlySummary: Array.from({length: 24}, (_, i) => ({hour: i, totalSec: 0})),
+      hourlyAppBreakdown: [],
+      timeline: []
+    };
+  }
+
+  function fetchDaily(date) {
+    return fetchJson(date) || emptyData(date);
+  }
+
+  function fetchMultiple(dates) {
+    return dates.map(d => fetchJson(d) || emptyData(d));
+  }
+
+  function getDatesForWeek(baseDate) {
+    const end = new Date(baseDate + 'T00:00:00');
+    const dates = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(end);
+      d.setDate(end.getDate() - i);
+      dates.push(formatDate(d));
+    }
+    return dates;
+  }
+
+  function getDatesForMonth(monthStr) {
+    const [y, m] = monthStr.split('-').map(Number);
+    const lastDay = new Date(y, m, 0).getDate();
+    const dates = [];
+    for (let d = 1; d <= lastDay; d++) {
+      dates.push(y + '-' + String(m).padStart(2,'0') + '-' + String(d).padStart(2,'0'));
+    }
+    return dates;
+  }
+
+  // --- 集計 ---
+
+  function aggregateMultiple(dataArray) {
+    const totalActiveSec = dataArray.reduce((s, d) => s + d.totalActiveSec, 0);
+    const totalIdleSec = dataArray.reduce((s, d) => s + d.totalIdleSec, 0);
+
+    const appMap = new Map();
+    for (const d of dataArray) {
+      for (const a of d.appSummary) {
+        appMap.set(a.appName, (appMap.get(a.appName) || 0) + a.totalSec);
+      }
+    }
+    const appSummary = Array.from(appMap.entries())
+      .map(([appName, totalSec]) => ({appName, totalSec, category: categorize(appName)}))
+      .sort((a, b) => b.totalSec - a.totalSec);
+
+    const catMap = new Map();
+    for (const a of appSummary) {
+      catMap.set(a.category, (catMap.get(a.category) || 0) + a.totalSec);
+    }
+    const categorySummary = Array.from(catMap.entries())
+      .map(([category, totalSec]) => ({category, totalSec}))
+      .sort((a, b) => b.totalSec - a.totalSec);
+
+    const dailySummary = dataArray.map(d => ({date: d.date, totalSec: d.totalActiveSec}));
+
+    const dailyAppBreakdown = [];
+    for (const d of dataArray) {
+      for (const a of d.appSummary) {
+        dailyAppBreakdown.push({date: d.date, appName: a.appName, totalSec: a.totalSec});
+      }
+    }
+
+    return {totalActiveSec, totalIdleSec, appSummary, categorySummary, dailySummary, dailyAppBreakdown};
+  }
+
+  // --- 描画 ---
+
+  function renderDaily(data) {
+    destroyCharts();
+    const {totalActiveSec, totalIdleSec, appSummary, categorySummary, hourlySummary, hourlyAppBreakdown, timeline} = data;
+
+    const top10 = appSummary.slice(0, 10);
+    const activeHourly = hourlySummary.filter(h => h.totalSec > 0);
+
+    // タイムラインチャート用データ
+    const hourAppMap = new Map();
+    for (const e of hourlyAppBreakdown) {
+      if (!hourAppMap.has(e.hour)) hourAppMap.set(e.hour, new Map());
+      hourAppMap.get(e.hour).set(e.appName, Math.round(e.totalSec / 60));
+    }
+    const appTotalMap = new Map();
+    for (const e of hourlyAppBreakdown) {
+      appTotalMap.set(e.appName, (appTotalMap.get(e.appName) || 0) + e.totalSec);
+    }
+    const tlApps = Array.from(appTotalMap.entries()).sort((a, b) => b[1] - a[1]).slice(0, 8).map(e => e[0]);
+
+    // 目標達成率
+    const targetSec = TARGET_ACTIVE_HOURS * 3600;
+    const achievePct = targetSec > 0 ? Math.min(Math.round((totalActiveSec / targetSec) * 100), 999) : 0;
+
+    content.innerHTML = buildSummaryCards(totalActiveSec, totalIdleSec, appSummary.length, achievePct, targetSec, 1)
+      + '<div class="charts">'
+      + '<div class="chart-box"><h2 style="border:none;margin:0 0 12px;">TOP 10 アプリ（分）</h2><canvas id="appChart"></canvas></div>'
+      + '<div class="chart-box"><h2 style="border:none;margin:0 0 12px;">カテゴリ別</h2><canvas id="catChart"></canvas></div>'
+      + '<div class="chart-box full-width"><h2 style="border:none;margin:0 0 12px;">時間帯別アクティビティ（分）</h2><canvas id="hourChart"></canvas></div>'
+      + '</div>'
+      + '<div class="charts"><div class="chart-box full-width"><h2 style="border:none;margin:0 0 12px;">タイムライン</h2><canvas id="timelineChart"></canvas></div></div>'
+      + buildAppTable(appSummary)
+      + buildTimelineLog(timeline, 'daily');
+
+    // Chart.js描画
+    drawAppChart(top10);
+    drawCatChart(categorySummary);
+
+    // 時間帯別
+    charts.push(new Chart(document.getElementById('hourChart'), {
       type: 'bar',
       data: {
-        labels: ${top10Labels},
-        datasets: [{
-          data: ${top10Data},
-          backgroundColor: ${top10Colors},
-          borderRadius: 4
-        }]
+        labels: activeHourly.map(h => h.hour + ':00'),
+        datasets: [{data: activeHourly.map(h => Math.round(h.totalSec / 60)), backgroundColor: '#4285F4', borderRadius: 4}]
+      },
+      options: {plugins: {legend: {display: false}}, scales: {x: {title: {display: true, text: '時間帯'}}, y: {beginAtZero: true, title: {display: true, text: '分'}}}}
+    }));
+
+    // タイムライン積み上げ
+    const activeHours = activeHourly.map(h => h.hour);
+    charts.push(new Chart(document.getElementById('timelineChart'), {
+      type: 'bar',
+      data: {
+        labels: activeHours.map(h => h + ':00'),
+        datasets: tlApps.map((appName, i) => ({
+          label: appName,
+          data: activeHours.map(h => hourAppMap.get(h)?.get(appName) || 0),
+          backgroundColor: CATEGORY_COLORS[categorize(appName)] || APP_PALETTE[i % APP_PALETTE.length],
+          borderRadius: 2
+        }))
       },
       options: {
         indexAxis: 'y',
-        plugins: { legend: { display: false } },
-        scales: { x: { beginAtZero: true, title: { display: true, text: '分' } } }
+        plugins: {legend: {position: 'bottom', labels: {boxWidth: 12, font: {size: 11}}}, tooltip: {callbacks: {label: ctx => ctx.dataset.label + ': ' + ctx.raw + '分'}}},
+        scales: {x: {stacked: true, beginAtZero: true, max: 60, title: {display: true, text: '分'}}, y: {stacked: true}},
+        responsive: true, maintainAspectRatio: false
       }
-    });
+    }));
 
-    new Chart(document.getElementById('catChart'), {
+    setupTargetInput(totalActiveSec, 1);
+  }
+
+  function renderRange(agg, period) {
+    destroyCharts();
+    const {totalActiveSec, totalIdleSec, appSummary, categorySummary, dailySummary, dailyAppBreakdown} = agg;
+    const top10 = appSummary.slice(0, 10);
+    const days = dailySummary.length;
+
+    const targetSec = TARGET_ACTIVE_HOURS * 3600 * days;
+    const achievePct = targetSec > 0 ? Math.min(Math.round((totalActiveSec / targetSec) * 100), 999) : 0;
+
+    // 日別アプリ積み上げ用データ
+    const activeDates = dailySummary.filter(d => d.totalSec > 0).map(d => d.date);
+    const dateAppMap = new Map();
+    for (const e of dailyAppBreakdown) {
+      if (!dateAppMap.has(e.date)) dateAppMap.set(e.date, new Map());
+      dateAppMap.get(e.date).set(e.appName, Math.round(e.totalSec / 60));
+    }
+    const appTotalMap = new Map();
+    for (const e of dailyAppBreakdown) {
+      appTotalMap.set(e.appName, (appTotalMap.get(e.appName) || 0) + e.totalSec);
+    }
+    const tlApps = Array.from(appTotalMap.entries()).sort((a, b) => b[1] - a[1]).slice(0, 8).map(e => e[0]);
+
+    content.innerHTML = buildSummaryCards(totalActiveSec, totalIdleSec, appSummary.length, achievePct, targetSec, days)
+      + '<div class="charts">'
+      + '<div class="chart-box"><h2 style="border:none;margin:0 0 12px;">TOP 10 アプリ（分）</h2><canvas id="appChart"></canvas></div>'
+      + '<div class="chart-box"><h2 style="border:none;margin:0 0 12px;">カテゴリ別</h2><canvas id="catChart"></canvas></div>'
+      + '<div class="chart-box full-width"><h2 style="border:none;margin:0 0 12px;">日別アクティビティ（分）</h2><canvas id="hourChart"></canvas></div>'
+      + '</div>'
+      + '<div class="charts"><div class="chart-box full-width"><h2 style="border:none;margin:0 0 12px;">日別アプリ使用タイムライン</h2><canvas id="timelineChart"></canvas></div></div>'
+      + buildAppTable(appSummary);
+
+    drawAppChart(top10);
+    drawCatChart(categorySummary);
+
+    // 日別棒グラフ
+    charts.push(new Chart(document.getElementById('hourChart'), {
+      type: 'bar',
+      data: {
+        labels: dailySummary.map(d => shortDate(d.date)),
+        datasets: [{data: dailySummary.map(d => Math.round(d.totalSec / 60)), backgroundColor: '#4285F4', borderRadius: 4}]
+      },
+      options: {plugins: {legend: {display: false}}, scales: {x: {title: {display: true, text: '日付'}}, y: {beginAtZero: true, title: {display: true, text: '分'}}}}
+    }));
+
+    // 日別アプリ積み上げ
+    charts.push(new Chart(document.getElementById('timelineChart'), {
+      type: 'bar',
+      data: {
+        labels: activeDates.map(d => shortDate(d)),
+        datasets: tlApps.map((appName, i) => ({
+          label: appName,
+          data: activeDates.map(d => dateAppMap.get(d)?.get(appName) || 0),
+          backgroundColor: CATEGORY_COLORS[categorize(appName)] || APP_PALETTE[i % APP_PALETTE.length],
+          borderRadius: 2
+        }))
+      },
+      options: {
+        plugins: {legend: {position: 'bottom', labels: {boxWidth: 12, font: {size: 11}}}, tooltip: {callbacks: {label: ctx => ctx.dataset.label + ': ' + ctx.raw + '分'}}},
+        scales: {x: {stacked: true, title: {display: true, text: '日付'}}, y: {stacked: true, beginAtZero: true, title: {display: true, text: '分'}}},
+        responsive: true, maintainAspectRatio: false
+      }
+    }));
+
+    setupTargetInput(totalActiveSec, days);
+  }
+
+  // --- 共通パーツ ---
+
+  function buildSummaryCards(totalActiveSec, totalIdleSec, appCount, achievePct, targetSec, days) {
+    const pctColor = achievePct >= 100 ? '#34A853' : achievePct >= 70 ? '#FBBC04' : '#EA4335';
+    const targetLabel = days === 1 ? TARGET_ACTIVE_HOURS + 'h' : TARGET_ACTIVE_HOURS + 'h × ' + days + '日';
+    return '<div class="summary">'
+      + '<div class="card"><div class="label">稼働時間</div><div class="value">' + fmtDur(totalActiveSec) + '</div></div>'
+      + '<div class="card"><div class="label">離席時間</div><div class="value">' + fmtDur(totalIdleSec) + '</div></div>'
+      + '<div class="card"><div class="label">使用アプリ数</div><div class="value">' + appCount + '</div></div>'
+      + '<div class="card">'
+      + '<div class="label">目標達成率</div>'
+      + '<div class="value" id="achievePct" style="color:' + pctColor + '">' + achievePct + '%</div>'
+      + '<div class="progress-bar"><div class="progress-fill" id="achieveBar" style="width:' + Math.min(achievePct, 100) + '%;background:' + pctColor + '"></div></div>'
+      + '<div style="display:flex;align-items:center;gap:6px;margin-top:8px;">'
+      + '<span class="sub" id="achieveSub">' + fmtDur(totalActiveSec) + ' / ' + fmtDur(targetSec) + '</span>'
+      + '<input id="targetInput" type="number" min="1" max="24" step="0.5" value="' + TARGET_ACTIVE_HOURS + '" style="width:52px;padding:2px 4px;border:1px solid #ddd;border-radius:4px;font-size:0.8rem;text-align:center;">'
+      + '<span class="sub">h/日</span>'
+      + '</div></div>'
+      + '</div>';
+  }
+
+  function setupTargetInput(totalActiveSec, days) {
+    const targetInput = document.getElementById('targetInput');
+    if (!targetInput) return;
+    targetInput.addEventListener('input', function() {
+      const target = parseFloat(this.value) || 1;
+      const targetSec = target * 3600 * days;
+      const pct = Math.min(Math.round((totalActiveSec / targetSec) * 100), 999);
+      const color = pct >= 100 ? '#34A853' : pct >= 70 ? '#FBBC04' : '#EA4335';
+      document.getElementById('achievePct').textContent = pct + '%';
+      document.getElementById('achievePct').style.color = color;
+      document.getElementById('achieveBar').style.width = Math.min(pct, 100) + '%';
+      document.getElementById('achieveBar').style.background = color;
+      document.getElementById('achieveSub').textContent = fmtDur(totalActiveSec) + ' / ' + fmtDur(targetSec);
+    });
+  }
+
+  function drawAppChart(top10) {
+    charts.push(new Chart(document.getElementById('appChart'), {
+      type: 'bar',
+      data: {
+        labels: top10.map(a => a.appName),
+        datasets: [{data: top10.map(a => Math.round(a.totalSec / 60)), backgroundColor: top10.map(a => CATEGORY_COLORS[a.category] || CATEGORY_COLORS.other), borderRadius: 4}]
+      },
+      options: {indexAxis: 'y', plugins: {legend: {display: false}}, scales: {x: {beginAtZero: true, title: {display: true, text: '分'}}}}
+    }));
+  }
+
+  function drawCatChart(categorySummary) {
+    charts.push(new Chart(document.getElementById('catChart'), {
       type: 'doughnut',
       data: {
-        labels: ${catLabels},
-        datasets: [{
-          data: ${catData},
-          backgroundColor: ${catColors}
-        }]
+        labels: categorySummary.map(c => c.category),
+        datasets: [{data: categorySummary.map(c => Math.round(c.totalSec / 60)), backgroundColor: categorySummary.map(c => CATEGORY_COLORS[c.category] || CATEGORY_COLORS.other)}]
       },
-      options: {
-        plugins: { legend: { position: 'right' } }
-      }
-    });
+      options: {plugins: {legend: {position: 'right'}}}
+    }));
+  }
 
-    new Chart(document.getElementById('hourChart'), {
-      type: 'bar',
-      data: {
-        labels: ${hourLabels},
-        datasets: [{
-          data: ${hourData},
-          backgroundColor: '#4285F4',
-          borderRadius: 4
-        }]
-      },
-      options: {
-        plugins: { legend: { display: false } },
-        scales: {
-          x: { title: { display: true, text: '時間帯' } },
-          y: { beginAtZero: true, title: { display: true, text: '分' } }
-        }
-      }
-    });
+  function buildAppTable(appSummary) {
+    const rows = appSummary.slice(0, 20).map((a, i) =>
+      '<tr><td>' + (i+1) + '</td><td>' + escapeHtml(a.appName) + '</td><td>' + escapeHtml(a.category) + '</td><td>' + fmtDur(a.totalSec) + '</td></tr>'
+    ).join('');
+    return '<h2>アプリランキング</h2>'
+      + '<table><thead><tr><th>#</th><th>アプリ</th><th>カテゴリ</th><th>時間</th></tr></thead><tbody>' + rows + '</tbody></table>';
+  }
 
-    new Chart(document.getElementById('timelineChart'), {
-      type: 'bar',
-      data: {
-        labels: ${tlHourLabels},
-        datasets: ${tlDatasets}
-      },
-      options: {
-        indexAxis: 'y',
-        plugins: {
-          legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } },
-          tooltip: {
-            callbacks: {
-              label: function(ctx) {
-                return ctx.dataset.label + ': ' + ctx.raw + '分';
-              }
-            }
-          }
-        },
-        scales: {
-          x: {
-            stacked: true,
-            beginAtZero: true,
-            max: 60,
-            title: { display: true, text: '分' }
-          },
-          y: { stacked: true }
-        },
-        responsive: true,
-        maintainAspectRatio: false
-      }
-    });
-  </script>
+  function buildTimelineLog(timeline, period) {
+    if (!timeline || timeline.length === 0) return '';
+    const filtered = timeline.filter(t => t.durationSec >= 10).slice(0, 100);
+    if (filtered.length === 0) return '';
+
+    const rows = filtered.map(t =>
+      '<tr><td>' + escapeHtml(t.appName) + '</td><td>' + new Date(t.startTime).toLocaleTimeString('ja-JP') + '</td><td>' + new Date(t.endTime).toLocaleTimeString('ja-JP') + '</td><td>' + fmtDur(t.durationSec) + '</td></tr>'
+    ).join('');
+
+    return '<h2>詳細ログ</h2>'
+      + '<details><summary style="cursor:pointer;padding:8px 0;font-size:0.9rem;color:#666;">全セッション一覧を表示</summary>'
+      + '<table><thead><tr><th>アプリ</th><th>開始</th><th>終了</th><th>時間</th></tr></thead><tbody>' + rows + '</tbody></table></details>';
+  }
+
+  // --- ナビゲーション ---
+
+  function showInputFor(period) {
+    dateDaily.style.display = period === 'daily' ? '' : 'none';
+    dateWeekly.style.display = period === 'weekly' ? '' : 'none';
+    weeklyRange.style.display = period === 'weekly' ? '' : 'none';
+    dateMonthly.style.display = period === 'monthly' ? '' : 'none';
+  }
+
+  function loadDaily(date) {
+    const data = fetchDaily(date);
+    if (data.totalActiveSec === 0 && data.appSummary.length === 0) {
+      content.innerHTML = '<div class="no-data">' + escapeHtml(date) + ' のデータはありません</div>';
+      return;
+    }
+    renderDaily(data);
+  }
+
+  function loadWeekly(baseDate) {
+    const dates = getDatesForWeek(baseDate);
+    weeklyRange.textContent = dates[0] + ' 〜 ' + dates[dates.length - 1];
+    const dataArray = fetchMultiple(dates);
+    const agg = aggregateMultiple(dataArray);
+    if (agg.totalActiveSec === 0) {
+      content.innerHTML = '<div class="no-data">' + dates[0] + ' 〜 ' + dates[dates.length - 1] + ' のデータはありません</div>';
+      return;
+    }
+    renderRange(agg, 'weekly');
+  }
+
+  function loadMonthly(monthStr) {
+    const dates = getDatesForMonth(monthStr);
+    const dataArray = fetchMultiple(dates);
+    const agg = aggregateMultiple(dataArray);
+    if (agg.totalActiveSec === 0) {
+      content.innerHTML = '<div class="no-data">' + monthStr + ' のデータはありません</div>';
+      return;
+    }
+    renderRange(agg, 'monthly');
+  }
+
+  // --- イベントバインド ---
+
+  periodSelect.addEventListener('change', function() {
+    const p = this.value;
+    showInputFor(p);
+    if (p === 'daily') loadDaily(dateDaily.value);
+    else if (p === 'weekly') loadWeekly(dateWeekly.value);
+    else loadMonthly(dateMonthly.value);
+  });
+
+  dateDaily.addEventListener('change', function() { loadDaily(this.value); });
+  dateWeekly.addEventListener('change', function() { loadWeekly(this.value); });
+  dateMonthly.addEventListener('change', function() { loadMonthly(this.value); });
+
+  // --- 初期表示 ---
+  const today = todayStr();
+  dateDaily.value = today;
+  dateWeekly.value = today;
+  dateMonthly.value = thisMonthStr();
+  loadDaily(today);
+})();
+</script>
 </body>
 </html>`;
 }

@@ -1,6 +1,6 @@
 import { db } from "../db.ts";
 import { config } from "../config.ts";
-import type { AppSummary, CategorySummary, HourlyAppEntry, HourlySummary, TimelineEntry } from "../types.ts";
+import type { AppSummary, CategorySummary, DailyReportData, HourlyAppEntry, HourlySummary, TimelineEntry } from "../types.ts";
 
 function categorize(appName: string): string {
   for (const [category, apps] of Object.entries(config.categories)) {
@@ -125,4 +125,19 @@ export function getTotalIdleSec(date: string): number {
     )
     .get(date) as { total: number };
   return row.total;
+}
+
+// --- 1日分の全データをまとめて返す ---
+
+export function exportDailyData(date: string): DailyReportData {
+  return {
+    date,
+    totalActiveSec: getTotalActiveSec(date),
+    totalIdleSec: getTotalIdleSec(date),
+    appSummary: getAppSummary(date),
+    categorySummary: getCategorySummary(date),
+    hourlySummary: getHourlySummary(date),
+    hourlyAppBreakdown: getHourlyAppBreakdown(date),
+    timeline: getTimeline(date),
+  };
 }

@@ -1,11 +1,12 @@
 {
   "name": "time-tracer",
   "version": "1.0.0",
-  "description": "PC usage tracking tool with daily HTML reports",
+  "description": "PC usage tracking tool with JSON data + single HTML viewer",
   "type": "module",
   "scripts": {
     "dev": "tsx src/index.ts",
     "report": "tsx src/report/reportGenerator.ts",
+    "report:viewer": "tsx src/report/reportGenerator.ts --viewer",
     "install-daemon": "bash scripts/install.sh",
     "uninstall-daemon": "bash scripts/uninstall.sh"
   },

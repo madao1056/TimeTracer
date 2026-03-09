@@ -1,8 +1,10 @@
 {
   "pollIntervalMs": 5000,
+  "idlePollIntervalMs": 30000,
   "idleThresholdMs": 300000,
   "sleepGapThresholdMs": 30000,
   "reportTime": "23:55",
+  "targetActiveHours": 8,
   "categories": {
     "browser": ["Google Chrome", "Safari", "Firefox", "Arc", "Brave Browser", "Microsoft Edge"],
     "editor": ["Code", "Visual Studio Code", "Cursor", "Xcode", "IntelliJ IDEA", "WebStorm"],

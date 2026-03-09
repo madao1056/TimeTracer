@@ -9,7 +9,17 @@ NODE_PATH="$(which node)"
 TSX_PATH="${PROJECT_DIR}/node_modules/.bin/tsx"
 
 mkdir -p "$LOG_DIR"
+mkdir -p "$LOG_DIR/bin"
 mkdir -p "$HOME/Library/LaunchAgents"
+
+# メニューバーアプリのビルド
+MENUBAR_SRC="${PROJECT_DIR}/src/macos/menubar.swift"
+MENUBAR_BIN="${LOG_DIR}/bin/TimeTracerMenu"
+if [ -f "$MENUBAR_SRC" ]; then
+  echo "[TimeTracer] Building menubar app..."
+  swiftc -O -o "$MENUBAR_BIN" "$MENUBAR_SRC" -framework Cocoa
+  echo "[TimeTracer] Menubar app built: $MENUBAR_BIN"
+fi
 
 cat > "$PLIST_PATH" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>

@@ -8,9 +8,11 @@ const PROJECT_ROOT = join(__dirname, "..");
 
 const DEFAULT_CONFIG: Config = {
   pollIntervalMs: 5000,
+  idlePollIntervalMs: 30_000,
   idleThresholdMs: 300_000,
   sleepGapThresholdMs: 30_000,
   reportTime: "23:55",
+  targetActiveHours: 8,
   categories: {},
 };
 
