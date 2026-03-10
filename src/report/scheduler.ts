@@ -1,5 +1,5 @@
 import { config } from "../config.ts";
-import { generateDailyJson, ensureViewer } from "./reportGenerator.ts";
+import { generateDailyJson, generateViewer, ensureViewer } from "./reportGenerator.ts";
 
 export class ReportScheduler {
   private dailyTimer: ReturnType<typeof setTimeout> | null = null;
@@ -15,6 +15,7 @@ export class ReportScheduler {
     this.dailyTimer = setTimeout(() => {
       try {
         generateDailyJson();
+        generateViewer();
       } catch (e) {
         console.error("[TimeTracer] Daily JSON generation failed:", e);
       }

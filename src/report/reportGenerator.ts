@@ -68,7 +68,7 @@ export function ensureViewer(): void {
 /** 日次JSON + ビューワー生成（後方互換） */
 export function generateReport(date?: string): string {
   generateDailyJson(date);
-  ensureViewer();
+  generateViewer();
   return join(DATA_DIR, "reports", `${date ?? todayString()}.json`);
 }
 
