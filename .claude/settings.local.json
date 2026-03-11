@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc --noEmit)",
+      "Bash(export PATH=\"/usr/local/bin:/opt/homebrew/bin:$HOME/.nvm/versions/node/*/bin:$PATH\")",
+      "Bash(export PATH=\"/Users/hashiguchimasaki/.nvm/versions/node/v22.16.0/bin:$PATH\")",
+      "Bash(npx tsx src/report/reportGenerator.ts)",
+      "Bash(npm install)",
+      "Bash(npx tsx -e \":*)",
+      "Bash(npx tsx src/report/reportGenerator.ts 2026-03-07)"
+    ]
+  }
+}
